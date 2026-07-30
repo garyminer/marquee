@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#0A0A0B">
+<title>Marquee</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@600;700&display=swap" rel="stylesheet">
+<link rel="manifest" href="./manifest.webmanifest">
+<link rel="apple-touch-icon" href="./apple-touch-icon.png">
+<link rel="icon" type="image/png" href="./icon-192.png">
+<style>
+  :root{
+    --bg:#0A0A0B;
+    --fg:#FFB000;              /* amber LED default */
+    --bar:rgba(18,18,20,.82);
+    --line:rgba(255,255,255,.08);
+    --muted:#6b6b70;
+    --size:0.46;              /* fraction of stage height */
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{height:100%;margin:0;overflow:hidden;background:var(--bg)}
+  body{
+    font-family:"Oswald","Arial Narrow","Helvetica Neue",system-ui,sans-serif;
+    color:var(--fg);
+    touch-action:manipulation;
+  }
+
+  /* ---- Stage / marquee ---- */
+  #stage{
+    position:fixed;inset:0;overflow:hidden;
+    display:flex;align-items:center;
+    /* subtle LED dot-grid texture */
+    background:
+      radial-gradient(circle at center, rgba(255,255,255,.028) 1px, transparent 1.4px) 0 0 / 14px 14px,
+      var(--bg);
+  }
+  #track{
+    white-space:nowrap;
+    font-weight:700;
+    letter-spacing:.02em;
+    line-height:1;
+    text-transform:uppercase;
+    color:var(--fg);
+    text-shadow:0 0 .08em rgba(255,255,255,.35), 0 0 .5em currentColor, 0 0 1.1em currentColor;
+    will-change:transform;
+    transform:translateX(100vw);
+    padding:0 .3em;
+  }
+  #hint{
+    position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+    text-align:center;padding:0 24px;
+    color:var(--muted);font-weight:600;font-size:clamp(16px,4.5vh,30px);
+    text-transform:uppercase;letter-spacing:.06em;
+    text-shadow:none;pointer-events:none;
+  }
+
+  /* ---- Control bar ---- */
+  #bar{
+    position:fixed;left:0;right:0;top:0;z-index:20;
+    display:flex;gap:10px;align-items:center;
+    padding:calc(env(safe-area-inset-top) + 10px) 12px 10px;
+    background:var(--bar);
+    backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);
+    border-bottom:1px solid var(--line);
+    transition:transform .28s ease, opacity .28s ease;
+  }
+  .btn{
+    flex:0 0 auto;height:48px;min-width:48px;padding:0 14px;
+    border:1px solid var(--line);border-radius:12px;
+    background:#171719;color:#e9e9ec;
+    font:inherit;font-size:20px;font-weight:600;
+    display:inline-flex;align-items:center;justify-content:center;gap:8px;
+    cursor:pointer;user-select:none;
+  }
+  .btn:active{transform:scale(.96)}
+  .btn:focus-visible{outline:2px solid var(--fg);outline-offset:2px}
+  #mic{background:#1d1d20}
+  #mic.listening{background:#3a1216;color:#ff6b6b;border-color:#5a1c22;animation:pulse 1.1s infinite}
+  @keyframes pulse{0%,100%{box-shadow:0 0 0 0 rgba(255,80,80,.45)}50%{box-shadow:0 0 0 10px rgba(255,80,80,0)}}
+  #text{
+    flex:1 1 auto;min-width:0;height:48px;
+    border:1px solid var(--line);border-radius:12px;
+    background:#0f0f11;color:#f2f2f4;
+    font:inherit;font-size:17px;font-weight:600;padding:0 14px;
+  }
+  #text:focus{outline:none;border-color:var(--fg)}
+  #text::placeholder{color:#55555a}
+
+  /* ---- Settings panel ---- */
+  #panel{
+    position:fixed;left:0;right:0;bottom:0;z-index:30;
+    background:var(--bar);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
+    border-top:1px solid var(--line);
+    padding:18px 18px calc(env(safe-area-inset-bottom) + 22px);
+    transform:translateY(110%);transition:transform .3s cubic-bezier(.2,.8,.2,1);
+    color:#e9e9ec;
+  }
+  #panel.open{transform:translateY(0)}
+  .phead{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
+  .phead h2{margin:0;font-size:18px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:#f2f2f4}
+  .row{margin:16px 0}
+  .row label{display:flex;justify-content:space-between;font-size:13px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-bottom:8px}
+  .row label b{color:#e9e9ec;font-weight:700}
+  input[type=range]{width:100%;height:34px;accent-color:var(--fg);background:transparent}
+  .swatches{display:flex;gap:12px}
+  .sw{width:44px;height:44px;border-radius:50%;border:2px solid transparent;cursor:pointer}
+  .sw[aria-pressed=true]{border-color:#fff;transform:scale(1.06)}
+  .toggle{display:flex;align-items:center;justify-content:space-between}
+  .toggle span{font-size:13px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+  .switch{width:52px;height:30px;border-radius:16px;background:#2a2a2e;position:relative;cursor:pointer;transition:background .2s}
+  .switch::after{content:"";position:absolute;top:3px;left:3px;width:24px;height:24px;border-radius:50%;background:#fff;transition:left .2s}
+  .switch[aria-pressed=true]{background:var(--fg)}
+  .switch[aria-pressed=true]::after{left:25px}
+
+  /* ---- Immersive ---- */
+  body.immersive #bar{transform:translateY(-110%);opacity:0;pointer-events:none}
+
+  /* toast */
+  #toast{
+    position:fixed;left:50%;bottom:calc(env(safe-area-inset-bottom) + 20px);transform:translateX(-50%) translateY(20px);
+    background:#1c1c1f;color:#e9e9ec;border:1px solid var(--line);
+    padding:12px 16px;border-radius:12px;font-size:14px;max-width:88vw;text-align:center;
+    opacity:0;transition:opacity .25s, transform .25s;z-index:40;pointer-events:none;
+  }
+  #toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+</style>
+</head>
+<body>
+  <div id="stage" aria-label="Marquee display, tap to hide controls">
+    <div id="track"></div>
+    <div id="hint">Tap the mic and say a few words</div>
+  </div>
+
+  <div id="bar">
+    <button id="mic" class="btn" aria-label="Speak">🎤</button>
+    <input id="text" type="text" inputmode="text" placeholder="…or type here" autocomplete="off" autocapitalize="characters">
+    <button id="gear" class="btn" aria-label="Settings">⚙️</button>
+  </div>
+
+  <div id="panel" role="dialog" aria-label="Settings">
+    <div class="phead">
+      <h2>Settings</h2>
+      <button id="closePanel" class="btn" aria-label="Close settings">Done</button>
+    </div>
+
+    <div class="row">
+      <label>Speed <b><span id="speedVal">150</span> px/s</b></label>
+      <input id="speed" type="range" min="40" max="700" step="10" value="150">
+    </div>
+
+    <div class="row">
+      <label>Text size <b><span id="sizeVal">46</span>%</b></label>
+      <input id="sizeR" type="range" min="20" max="85" step="1" value="46">
+    </div>
+
+    <div class="row">
+      <label>Color</label>
+      <div class="swatches" id="swatches">
+        <button class="sw" data-c="#FFB000" style="background:#FFB000" aria-label="Amber" aria-pressed="true"></button>
+        <button class="sw" data-c="#39FF6A" style="background:#39FF6A" aria-label="Green" aria-pressed="false"></button>
+        <button class="sw" data-c="#FF3B3B" style="background:#FF3B3B" aria-label="Red" aria-pressed="false"></button>
+        <button class="sw" data-c="#22E0FF" style="background:#22E0FF" aria-label="Cyan" aria-pressed="false"></button>
+        <button class="sw" data-c="#FFFFFF" style="background:#FFFFFF" aria-label="White" aria-pressed="false"></button>
+      </div>
+    </div>
+
+    <div class="row toggle">
+      <span>Keep screen awake</span>
+      <div id="wakeToggle" class="switch" role="button" aria-label="Keep screen awake" aria-pressed="true"></div>
+    </div>
+  </div>
+
+  <div id="toast" role="status"></div>
+
+<script>
+(function(){
+  "use strict";
+  const $ = id => document.getElementById(id);
+  const stage=$("stage"), track=$("track"), hint=$("hint"),
+        micBtn=$("mic"), textIn=$("text"), gear=$("gear"),
+        panel=$("panel"), closePanel=$("closePanel"),
+        speedR=$("speed"), speedVal=$("speedVal"),
+        sizeR=$("sizeR"), sizeVal=$("sizeVal"),
+        swatches=$("swatches"), wakeToggle=$("wakeToggle"),
+        toast=$("toast");
+
+  // ---- persisted settings (degrades gracefully if storage is blocked) ----
+  const DEFAULTS = { text:"", speed:150, size:46, color:"#FFB000", wake:true };
+  const store = {
+    load(){ try{ return {...DEFAULTS, ...JSON.parse(localStorage.getItem("marquee")||"{}")}; }catch(e){ return {...DEFAULTS}; } },
+    save(s){ try{ localStorage.setItem("marquee", JSON.stringify(s)); }catch(e){} }
+  };
+  const S = store.load();
+
+  // ---- apply settings to UI ----
+  function applyColor(c){ document.documentElement.style.setProperty("--fg", c);
+    [...swatches.children].forEach(b=>b.setAttribute("aria-pressed", b.dataset.c===c)); }
+  function applySize(pct){ document.documentElement.style.setProperty("--size", pct/100);
+    sizeVal.textContent=pct; sizeR.value=pct; sizeText(); }
+  function applySpeed(px){ speedVal.textContent=px; speedR.value=px; }
+
+  speedR.value=S.speed; sizeR.value=S.size;
+  applySpeed(S.speed); applySize(S.size); applyColor(S.color);
+  wakeToggle.setAttribute("aria-pressed", S.wake);
+  if(S.text){ textIn.value=S.text; }
+
+  // ---- marquee sizing ----
+  function sizeText(){ const px = stage.clientHeight * (S.size/100); track.style.fontSize = px + "px"; }
+  window.addEventListener("resize", ()=>{ sizeText(); reset(); });
+
+  // ---- text handling ----
+  let x = window.innerWidth;
+  function reset(){ x = stage.clientWidth; track.style.transform = "translateX("+x+"px)"; }
+  function setText(t){
+    t = (t||"").trim();
+    S.text = t; store.save(S);
+    track.textContent = t;
+    hint.style.display = t ? "none" : "flex";
+    reset();
+  }
+  setText(S.text);
+
+  // ---- animation loop (constant px/sec, independent of message length) ----
+  let last=0;
+  function frame(now){
+    if(!last) last=now;
+    const dt=(now-last)/1000; last=now;
+    if(S.text){
+      x -= S.speed * dt;
+      const w = track.offsetWidth;
+      if(x < -w) x = stage.clientWidth;   // exit left, re-enter right
+      track.style.transform = "translateX("+x+"px)";
+    }
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+
+  // ---- controls ----
+  speedR.addEventListener("input", e=>{ S.speed=+e.target.value; speedVal.textContent=S.speed; store.save(S); });
+  sizeR.addEventListener("input", e=>{ S.size=+e.target.value; sizeVal.textContent=S.size;
+    document.documentElement.style.setProperty("--size", S.size/100); sizeText(); store.save(S); });
+  swatches.addEventListener("click", e=>{ const b=e.target.closest(".sw"); if(!b) return;
+    S.color=b.dataset.c; applyColor(S.color); store.save(S); });
+
+  textIn.addEventListener("input", e=> setText(e.target.value));
+  textIn.addEventListener("keydown", e=>{ if(e.key==="Enter"){ textIn.blur(); } });
+
+  gear.addEventListener("click", ()=> panel.classList.add("open"));
+  closePanel.addEventListener("click", ()=> panel.classList.remove("open"));
+
+  // tap stage -> toggle immersive (hide bar). Ignore when panel is open.
+  stage.addEventListener("click", ()=>{
+    if(panel.classList.contains("open")){ panel.classList.remove("open"); return; }
+    document.body.classList.toggle("immersive");
+  });
+
+  // ---- toast helper ----
+  let toastT;
+  function say(msg){ toast.textContent=msg; toast.classList.add("show");
+    clearTimeout(toastT); toastT=setTimeout(()=>toast.classList.remove("show"), 2600); }
+
+  // ---- Wake Lock (keep screen on while displaying) ----
+  let wakeLock=null;
+  async function acquireWake(){
+    if(!S.wake || !("wakeLock" in navigator)) return;
+    try{ wakeLock = await navigator.wakeLock.request("screen"); }catch(e){}
+  }
+  function releaseWake(){ if(wakeLock){ wakeLock.release().catch(()=>{}); wakeLock=null; } }
+  wakeToggle.addEventListener("click", ()=>{
+    S.wake = wakeToggle.getAttribute("aria-pressed")!=="true";
+    wakeToggle.setAttribute("aria-pressed", S.wake); store.save(S);
+    if(S.wake) acquireWake(); else releaseWake();
+  });
+  document.addEventListener("visibilitychange", ()=>{ if(document.visibilityState==="visible") acquireWake(); });
+  acquireWake();
+
+  // ---- Voice input (Web Speech API) ----
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  let rec=null, listening=false;
+
+  if(!SR){
+    micBtn.disabled=true; micBtn.style.opacity=.4;
+    micBtn.title="Voice input not supported in this browser — type instead";
+  } else {
+    rec = new SR();
+    rec.lang = navigator.language || "en-US";
+    rec.interimResults = true;    // update marquee live as you speak
+    rec.continuous = false;       // a few words, then stop
+    rec.maxAlternatives = 1;
+
+    rec.onstart = ()=>{ listening=true; micBtn.classList.add("listening"); micBtn.textContent="●"; };
+    rec.onend   = ()=>{ listening=false; micBtn.classList.remove("listening"); micBtn.textContent="🎤"; };
+    rec.onerror = e=>{
+      listening=false; micBtn.classList.remove("listening"); micBtn.textContent="🎤";
+      if(e.error==="not-allowed"||e.error==="service-not-allowed") say("Microphone permission denied");
+      else if(e.error==="no-speech") say("Didn't catch that — try again");
+      else say("Voice error: "+e.error);
+    };
+    rec.onresult = ev=>{
+      let s="";
+      for(let i=ev.resultIndex;i<ev.results.length;i++) s += ev.results[i][0].transcript;
+      s = s.trim();
+      if(s){ textIn.value=s; setText(s); }
+    };
+
+    micBtn.addEventListener("click", ()=>{
+      if(listening){ rec.stop(); return; }
+      try{ rec.start(); }catch(e){ /* start() throws if already starting */ }
+    });
+  }
+})();
+
+// Register service worker for offline launch + installability.
+// Relative "./sw.js" keeps the scope correct on GitHub Pages project sites (/reponame/).
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => { navigator.serviceWorker.register("./sw.js").catch(()=>{}); });
+}
+</script>
+</body>
+</html>
