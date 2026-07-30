@@ -1,5 +1,5 @@
 // Bump CACHE version whenever you change the app, so phones pull the new files.
-const CACHE = "marquee-v1";
+const CACHE = "marquee-v2";
 const ASSETS = [
   "./",
   "./index.html",
