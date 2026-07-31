@@ -177,6 +177,11 @@
     background:#211316;color:#ff6b6b;font-size:18px;cursor:pointer;
     display:flex;align-items:center;justify-content:center;
   }
+  .mrow .linkbtn{
+    flex:0 0 auto;width:44px;height:44px;border:1px solid var(--line);border-radius:10px;
+    background:#131317;color:#c9c9cf;font-size:16px;cursor:pointer;
+    display:flex;align-items:center;justify-content:center;
+  }
   .muted-note{color:var(--muted);font-size:14px;line-height:1.5;margin:14px 2px 2px}
   #msgList:empty + .muted-note{display:block}
   #msgList:not(:empty) + .muted-note{display:none}
@@ -309,6 +314,17 @@
   }
   setText(S.text);
 
+  // ---- launch via URL (?m=...) so an iOS Shortcut / widget can open a specific message ----
+  (function(){
+    const pm = new URLSearchParams(location.search).get("m");
+    if(pm && pm.trim()){
+      const t = pm.trim();
+      textIn.value = t;
+      setText(t);
+      document.body.classList.add("immersive");   // open straight into the scroll
+    }
+  })();
+
   // ---- animation loop (constant px/sec, independent of message length) ----
   let last=0;
   function frame(now){
@@ -353,6 +369,14 @@
   // ---- saved messages ----
   function saveMessages(){ store.save(S); renderChips(); }
 
+  function launchURL(t){ return location.origin + location.pathname + "?m=" + encodeURIComponent(t); }
+  function copyLaunchLink(t){
+    const url = launchURL(t);
+    if(navigator.clipboard && navigator.clipboard.writeText){
+      navigator.clipboard.writeText(url).then(()=> say("Launch link copied — paste into a Shortcut"), ()=> say(url));
+    } else { say(url); }
+  }
+
   function useMessage(t){                // one-tap display
     textIn.value = t; setText(t);
     closePanels();
@@ -388,11 +412,15 @@
       // edit in place: update data + chips without re-rendering the list (keeps focus)
       edit.addEventListener("input", ()=>{ S.messages[i] = edit.value; store.save(S); renderChips(); });
 
+      const link = document.createElement("button");
+      link.className = "linkbtn"; link.textContent = "🔗"; link.setAttribute("aria-label","Copy launch link for this message");
+      link.addEventListener("click", ()=> copyLaunchLink(S.messages[i]));
+
       const del = document.createElement("button");
       del.className = "del"; del.textContent = "✕"; del.setAttribute("aria-label","Delete message");
       del.addEventListener("click", ()=>{ S.messages.splice(i,1); saveMessages(); renderList(); });
 
-      row.appendChild(ord); row.appendChild(edit); row.appendChild(del);
+      row.appendChild(ord); row.appendChild(edit); row.appendChild(link); row.appendChild(del);
       msgList.appendChild(row);
     });
   }

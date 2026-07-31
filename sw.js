@@ -1,5 +1,5 @@
 // Bump CACHE version whenever you change the app, so phones pull the new files.
-const CACHE = "marquee-v2";
+const CACHE = "marquee-v3";
 const ASSETS = [
   "./",
   "./index.html",
@@ -25,6 +25,13 @@ self.addEventListener("activate", (e) => {
 
 self.addEventListener("fetch", (e) => {
   if (e.request.method !== "GET") return;
+  // Navigations (incl. ?m=... launch links) resolve to the cached shell even offline.
+  if (e.request.mode === "navigate") {
+    e.respondWith(
+      fetch(e.request).catch(() => caches.match("./index.html", { ignoreSearch: true }))
+    );
+    return;
+  }
   e.respondWith(
     caches.match(e.request).then((cached) => {
       if (cached) return cached;
@@ -35,7 +42,7 @@ self.addEventListener("fetch", (e) => {
           caches.open(CACHE).then((c) => c.put(e.request, copy));
         }
         return resp;
-      }).catch(() => caches.match("./index.html"));
+      }).catch(() => caches.match("./index.html", { ignoreSearch: true }));
     })
   );
 });
